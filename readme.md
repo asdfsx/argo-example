@@ -23,4 +23,5 @@ docker build -t asdfsx/toolbox .
 docker push asdfsx/toolbox
 
 ## create argo workflow
+kubectl create -f pvc.yaml
 argo submit -n argo argo.yaml
