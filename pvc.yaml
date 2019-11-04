@@ -1,0 +1,31 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: my-existing-volume
+  namespace: argo
+spec:
+  accessModes: [ "ReadWriteMany" ]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pvcpod
+  namespace: argo
+spec:
+  containers:
+    - name: myfrontend
+      image: asdfsx/toolbox:latest
+      imagePullPolicy: IfNotPresent
+      command:
+      - sleep
+      - "10000000"
+      volumeMounts:
+      - mountPath: "/mnt/vol"
+        name: mypd
+  volumes:
+    - name: mypd
+      persistentVolumeClaim:
+        claimName: my-existing-volume

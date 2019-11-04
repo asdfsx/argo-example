@@ -1,0 +1,221 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: dag
+  namespace: argo
+spec:
+  serviceAccountName: argo
+  entrypoint: example
+  onExit: exitting
+  # volumeClaimTemplates:                 # define volume, same syntax as k8s Pod spec
+#   - metadata:
+#       name: workvol                     # name of volume claim
+#     spec:
+#       accessModes: [ "ReadWriteMany" ]
+#       resources:
+#         requests:
+#           storage: 1Gi  
+  volumes:
+  - name: workvol
+    persistentVolumeClaim:
+      claimName: my-existing-volume
+  templates:
+  - name: example
+    steps:
+    - - name: clean
+        template: clean
+        arguments:
+          parameters: 
+          - name: mountpath
+            value: /mnt/vol
+          - name: workdir
+            value: /mnt/vol
+          - name: subdir
+            value: work
+    - - name: download-1
+        template: wget
+        arguments:
+          parameters: 
+          - name: url
+            value: http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz
+          - name: workdir
+            value: /mnt/vol/work/data
+          - name: mountpath
+            value: /mnt/vol
+      - name: download-2
+        template: wget
+        arguments:
+          parameters: 
+          - name: url
+            value: http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz
+          - name: workdir
+            value: /mnt/vol/work/data
+          - name: mountpath
+            value: /mnt/vol
+      - name: download-3
+        template: wget
+        arguments:
+          parameters: 
+          - name: url
+            value: http://yann.lecun.com/exdb/mnist/t10k-images-idx3-ubyte.gz
+          - name: workdir
+            value: /mnt/vol/work/data
+          - name: mountpath
+            value: /mnt/vol            
+      - name: download-4
+        template: wget
+        arguments:
+          parameters: 
+          - name: url
+            value: http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz
+          - name: workdir
+            value: /mnt/vol/work/data
+          - name: mountpath
+            value: /mnt/vol
+      - name: download-5
+        template: git
+        arguments:
+          parameters: 
+          - name: url
+            value: git://github.com/asdfsx/mnist.git
+          - name: workdir
+            value: /mnt/vol/work/code
+          - name: mountpath
+            value: /mnt/vol
+    - - name: check-data
+        template: check-data
+        arguments:
+          parameters:
+          - name: workdir
+            value: /mnt/vol/work/data
+          - name: mountpath
+            value: /mnt/vol
+    - - name: unzip-data
+        template: unzip-data
+        arguments:
+          parameters:
+          - name: zipfile
+            value: "{{item}}"
+          - name: workdir
+            value: /mnt/vol/work/data
+          - name: mountpath
+            value: /mnt/vol
+        withParam: "{{steps.check-data.outputs.result}}"
+    - - name: checking-data-2
+        template: checking
+        arguments:
+          parameters:
+          - name: mountpath
+            value: /mnt/vol
+          - name: subdir
+            value: work/data
+      - name: checking-code-2
+        template: checking
+        arguments:
+          parameters:
+          - name: mountpath
+            value: /mnt/vol
+          - name: subdir
+            value: work/code
+    - - name: extting
+        template: exitting
+  - name: clean
+    inputs:
+      parameters:
+      - name: mountpath
+      - name: workdir
+      - name: subdir
+    container:
+      image: asdfsx/toolbox:latest
+      WorkingDir: "{{inputs.parameters.workdir}}"
+      command: [rm, "-rf", "./{{inputs.parameters.subdir}}"]
+      volumeMounts:
+      - name: workvol
+        mountPath: "{{inputs.parameters.mountpath}}"
+  - name: checking
+    inputs:
+      parameters:
+      - name: mountpath
+      - name: subdir
+    container:
+      image: asdfsx/toolbox:latest
+      command: [ls, "{{inputs.parameters.mountpath}}/{{inputs.parameters.subdir}}"]
+      volumeMounts:
+      - name: workvol
+        mountPath: "{{inputs.parameters.mountpath}}"
+  - name: exitting
+    inputs:
+      parameters:
+      - name: message
+        value: workflow finished!
+    container:
+      image: asdfsx/toolbox:latest
+      command: [echo, "{{inputs.parameters.message}}"]
+  - name: wget
+    inputs:
+      parameters:
+      - name: url
+      - name: workdir
+      - name: mountpath
+    container:
+      image: asdfsx/toolbox:latest
+      WorkingDir: "{{inputs.parameters.workdir}}"
+      command: [wget, "{{inputs.parameters.url}}"]
+      volumeMounts:
+      - name: workvol
+        mountPath: "{{inputs.parameters.mountpath}}"
+  - name: check-data
+    inputs:
+      parameters:
+      - name: workdir
+      - name: mountpath
+    script:
+      image: python:3.8.0-alpine3.10
+      WorkingDir: "{{inputs.parameters.workdir}}"
+      command: [python]
+      source: |
+        import json, glob, sys
+        json.dump(glob.glob("./*.gz"), sys.stdout)
+      volumeMounts:
+      - name: workvol
+        mountPath: "{{inputs.parameters.mountpath}}"
+  - name: unzip-data
+    inputs:
+      parameters:
+      - name: zipfile
+      - name: workdir
+      - name: mountpath
+    container:
+      image: asdfsx/toolbox:latest
+      WorkingDir: "{{inputs.parameters.workdir}}"
+      command: [gunzip,"{{inputs.parameters.zipfile}}"]
+      volumeMounts:
+      - name: workvol
+        mountPath: "{{inputs.parameters.mountpath}}"
+  - name: git
+    inputs:
+      parameters:
+      - name: url
+      - name: workdir
+      - name: mountpath
+    container:
+      image: asdfsx/toolbox:latest
+      WorkingDir: "{{inputs.parameters.workdir}}"
+      command: [sh, "-c", "git clone {{inputs.parameters.url}} $(pwd)"]
+      volumeMounts:
+      - name: workvol
+        mountPath: "{{inputs.parameters.mountpath}}"
+  - name: traing-mnist
+    inputs:
+      parameters:
+      - name: datadir
+      - name: logdir
+      - name: mountpath
+      - name: workdir
+    container:
+      image: tensorflow:1.15
+      WorkingDir: "{{inputs.parameters.workdir}}"
+      command: [python, "mnist_with_summaries.py", "--data_dir", "{{inputs.parameters.datadir}}", "--log_dir", "{{inputs.parameters.logdir}}"]
+      volumeMounts:
+      - name: workvol
+        mountPath: "{{inputs.parameters.mountpath}}"
