@@ -117,6 +117,30 @@ spec:
             value: /mnt/vol
           - name: subdir
             value: work/code
+    - - name: train-1
+        template: traing-mnist-1
+        arguments:
+          parameters:
+          - name: mountpath
+            value: /mnt/vol
+          - name: workdir
+            value: /mnt/vol/work/code/mnist
+          - name: datadir
+            value: /mnt/vol/work/data
+          - name: logdir
+            value: /mnt/vol/work/log
+    - - name: train-2
+        template: traing-mnist-2
+        arguments:
+          parameters:
+          - name: mountpath
+            value: /mnt/vol
+          - name: workdir
+            value: /mnt/vol/work/code/fashion_mnist
+          - name: datadir
+            value: /mnt/vol/work/data
+          - name: modledir
+            value: /mnt/vol/work/model
     - - name: extting
         template: exitting
   - name: clean
@@ -127,6 +151,7 @@ spec:
       - name: subdir
     container:
       image: asdfsx/toolbox:latest
+      imagePullPolicy: Never
       WorkingDir: "{{inputs.parameters.workdir}}"
       command: [rm, "-rf", "./{{inputs.parameters.subdir}}"]
       volumeMounts:
@@ -139,6 +164,7 @@ spec:
       - name: subdir
     container:
       image: asdfsx/toolbox:latest
+      imagePullPolicy: Never
       command: [ls, "{{inputs.parameters.mountpath}}/{{inputs.parameters.subdir}}"]
       volumeMounts:
       - name: workvol
@@ -150,6 +176,7 @@ spec:
         value: workflow finished!
     container:
       image: asdfsx/toolbox:latest
+      imagePullPolicy: Never
       command: [echo, "{{inputs.parameters.message}}"]
   - name: wget
     inputs:
@@ -159,6 +186,7 @@ spec:
       - name: mountpath
     container:
       image: asdfsx/toolbox:latest
+      imagePullPolicy: Never
       WorkingDir: "{{inputs.parameters.workdir}}"
       command: [wget, "{{inputs.parameters.url}}"]
       volumeMounts:
@@ -171,6 +199,7 @@ spec:
       - name: mountpath
     script:
       image: python:3.8.0-alpine3.10
+      imagePullPolicy: Never
       WorkingDir: "{{inputs.parameters.workdir}}"
       command: [python]
       source: |
@@ -187,8 +216,9 @@ spec:
       - name: mountpath
     container:
       image: asdfsx/toolbox:latest
+      imagePullPolicy: Never
       WorkingDir: "{{inputs.parameters.workdir}}"
-      command: [gunzip,"{{inputs.parameters.zipfile}}"]
+      command: [gunzip, "-k", "{{inputs.parameters.zipfile}}"]
       volumeMounts:
       - name: workvol
         mountPath: "{{inputs.parameters.mountpath}}"
@@ -205,7 +235,7 @@ spec:
       volumeMounts:
       - name: workvol
         mountPath: "{{inputs.parameters.mountpath}}"
-  - name: traing-mnist
+  - name: traing-mnist-1
     inputs:
       parameters:
       - name: datadir
@@ -213,9 +243,25 @@ spec:
       - name: mountpath
       - name: workdir
     container:
-      image: tensorflow:1.15
+      image: tensorflow/tensorflow:1.15.0-py3
+      imagePullPolicy: Never
       WorkingDir: "{{inputs.parameters.workdir}}"
       command: [python, "mnist_with_summaries.py", "--data_dir", "{{inputs.parameters.datadir}}", "--log_dir", "{{inputs.parameters.logdir}}"]
+      volumeMounts:
+      - name: workvol
+        mountPath: "{{inputs.parameters.mountpath}}"
+  - name: traing-mnist-2
+    inputs:
+      parameters:
+      - name: datadir
+      - name: modledir
+      - name: mountpath
+      - name: workdir
+    container:
+      image: tensorflow/tensorflow:1.15.0-py3
+      imagePullPolicy: Never
+      WorkingDir: "{{inputs.parameters.workdir}}"
+      command: [python, "fashion_mnist.py", "--data_dir", "{{inputs.parameters.datadir}}", "--modle_dir", "{{inputs.parameters.modledir}}"]
       volumeMounts:
       - name: workvol
         mountPath: "{{inputs.parameters.mountpath}}"
